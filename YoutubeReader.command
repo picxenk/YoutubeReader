@@ -11,13 +11,21 @@ pause_and_close() {
 
 trap '' INT
 
-SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
+SELF="$0"
+while [ -L "$SELF" ]; do
+  TARGET="$(readlink "$SELF")"
+  if [ -z "$TARGET" ]; then
+    break
+  fi
+  case "$TARGET" in
+    /*) SELF="$TARGET" ;;
+    *) SELF="$(dirname "$SELF")/$TARGET" ;;
+  esac
+done
 PROJECT_DIR="$(cd "$(dirname "$SELF")" 2>/dev/null && pwd)"
-if [ ! -f "$PROJECT_DIR/package.json" ] && [ -f "/Users/picxenk/Sandbox/YoutubeReader/package.json" ]; then
-  PROJECT_DIR="/Users/picxenk/Sandbox/YoutubeReader"
-fi
 if [ ! -f "$PROJECT_DIR/package.json" ]; then
   echo "[오류] YoutubeReader 프로젝트 폴더를 찾을 수 없습니다."
+  echo "YoutubeReader.command 는 프로젝트 폴더 안에 두고 실행해 주세요."
   pause_and_close
   exit 1
 fi
