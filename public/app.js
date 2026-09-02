@@ -30,6 +30,7 @@ let inspectedUrl = null;
 let inspectedOptions = [];
 let viewedFolder = null;
 let viewedTitle = null;
+let viewedSourceUrl = null;
 let viewedAnnotations = [];
 let selectedSegments = null;
 let lastMenuPos = { x: 0, y: 0 };
@@ -396,6 +397,7 @@ async function openViewer(folder) {
 function renderViewer(item) {
   viewedTitle = item.title;
   viewedFolder = item.folder;
+  viewedSourceUrl = item.sourceUrl || null;
   viewedAnnotations = Array.isArray(item.annotations) ? item.annotations : [];
   const videoFile = item.files.find((f) => f.type === "video");
   const audioFile = item.files.find((f) => f.type === "audio");
@@ -641,7 +643,12 @@ function buildAnnotationsMd() {
   }
   const sorted = viewedAnnotations.slice().sort((a, b) => a.start - b.start);
   for (const a of sorted) {
-    lines.push(`## [${formatTimestamp(a.start)}] ${a.type === "highlight" ? "하이라이트" : "메모"}`, "");
+    const label = a.type === "highlight" ? "하이라이트" : "메모";
+    const ytUrl = youtubeTimeUrl(viewedSourceUrl, a.start);
+    const heading = ytUrl
+      ? `## [${formatTimestamp(a.start)}](${ytUrl}) ${label}`
+      : `## [${formatTimestamp(a.start)}] ${label}`;
+    lines.push(heading, "");
     if (a.text) lines.push(`> ${a.text.split("\n").join(" ")}`, "");
     if (a.type === "note" && a.note) lines.push(`**메모:** ${a.note.split("\n").join(" ")}`, "");
   }
@@ -959,6 +966,7 @@ function showScriptError(message) {
 
 function resetViewer() {
   viewedFolder = null;
+  viewedSourceUrl = null;
   viewerContent.innerHTML = "";
   viewerContent.classList.add("hidden");
   viewerEmpty.classList.remove("hidden");
