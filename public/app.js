@@ -87,6 +87,20 @@ function formatTimestamp(seconds) {
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
+function youtubeTimeUrl(sourceUrl, seconds) {
+  if (!sourceUrl) return null;
+  let u;
+  try {
+    u = new URL(sourceUrl);
+  } catch {
+    return null;
+  }
+  const host = u.hostname.toLowerCase();
+  if (host !== "youtu.be" && !/(^|\.)youtube\.com$/.test(host)) return null;
+  u.searchParams.set("t", `${Math.floor(Number(seconds) || 0)}s`);
+  return u.toString();
+}
+
 function mediaUrl(folder, name) {
   return `/media/${encodeURIComponent(folder)}/${encodeURIComponent(name)}`;
 }
@@ -450,11 +464,15 @@ function renderScriptSection(item) {
   html += '<div id="script-status" class="script-status hidden"></div>';
   if (script && Array.isArray(script.segments)) {
     for (const seg of script.segments) {
+      const ytUrl = youtubeTimeUrl(item.sourceUrl, seg.start);
+      const timeHtml = ytUrl
+        ? `<a class="segment-time" href="${escapeHtml(ytUrl)}" target="_blank" rel="noreferrer" title="유튜브에서 이 시간부터 열기">${formatTimestamp(seg.start)}</a>`
+        : `<span class="segment-time">${formatTimestamp(seg.start)}</span>`;
       html += `
         <div class="segment" data-start="${seg.start}" data-end="${seg.end}">
           <div class="segment-line">
             <button class="segment-play" type="button" title="이 위치에서 재생">▶</button>
-            <span class="segment-time">${formatTimestamp(seg.start)}</span>
+            ${timeHtml}
             <span class="segment-text">${escapeHtml(seg.text)}</span>
           </div>
         </div>
@@ -514,7 +532,7 @@ function wireScriptInteractions(item) {
     });
   }
 
-  viewerContent.querySelectorAll(".segment-play, .segment-time").forEach((el) => {
+  viewerContent.querySelectorAll(".segment-play, span.segment-time").forEach((el) => {
     el.addEventListener("click", () => {
       const segment = el.closest(".segment");
       const start = parseFloat(segment.dataset.start);

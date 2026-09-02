@@ -118,7 +118,7 @@ async function getItem(folderName) {
   } catch {
     script = null;
   }
-  return { folder: folderName, title: folderName, files, info, script };
+  return { folder: folderName, title: folderName, files, info, script, sourceUrl: parseSourceUrl(info) };
 }
 
 async function deleteItem(folderName) {
@@ -146,6 +146,19 @@ function formatTimestamp(seconds) {
   const sec = s % 60;
   if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
+
+function parseSourceUrl(infoMd) {
+  if (typeof infoMd !== "string") return null;
+  const match = infoMd.match(/^[-*]\s*원본 URL:\s*(\S+)\s*$/m);
+  if (!match) return null;
+  try {
+    const parsed = new URL(match[1]);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    return match[1];
+  } catch {
+    return null;
+  }
 }
 
 function formatSize(bytes) {
@@ -220,4 +233,5 @@ module.exports = {
   migrateLegacyFiles,
   formatDuration,
   formatTimestamp,
+  parseSourceUrl,
 };

@@ -54,7 +54,7 @@ npm start
 
 ### 스크립트 추출 (Whisper)
 
-뷰어의 정보 아래 `스크립트 추출` 버튼을 누르면 항목의 음성 파일을 로컬 Whisper로 변환해 타임라인이 포함된 스크립트를 만든다. 결과는 폴더에 `script.json`(앱용)과 `SCRIPT.md`(사람이 읽는 용)로 저장된다. 스크립트의 각 문장 옆 재생 버튼을 누르면 해당 위치에서 영상이 재생되고, 재생 중인 문장이 하이라이트된다. 영상 타임라인을 클릭하면 해당 시간의 문장으로 스크립트가 이동하고, 영상 하단의 `Sync` 체크박스를 켜면 재생 중 스크립트가 자동으로 따라간다.
+뷰어의 정보 아래 `스크립트 추출` 버튼을 누르면 항목의 음성 파일을 로컬 Whisper로 변환해 타임라인이 포함된 스크립트를 만든다. 결과는 폴더에 `script.json`(앱용)과 `SCRIPT.md`(사람이 읽는 용)로 저장된다. 스크립트의 각 문장 옆 재생 버튼을 누르면 해당 위치에서 영상이 재생되고, 재생 중인 문장이 하이라이트된다. 원본이 유튜브 영상이면 시간 표기가 링크가 되어 클릭 시 해당 시간부터 재생되는 유튜브 페이지가 새 탭에 열린다(링크를 우클릭해 URL을 복사할 수도 있다). 영상 타임라인을 클릭하면 해당 시간의 문장으로 스크립트가 이동하고, 영상 하단의 `Sync` 체크박스를 켜면 재생 중 스크립트가 자동으로 따라간다.
 
 스크립트에서 드래그하면 문장 단위로 선택되며, 복사하면 마지막에 `[시작시간 : 끝시간 - 영상제목]` 인용 줄이 자동으로 함께 들어간다.
 
@@ -94,7 +94,7 @@ downloads/
 | POST | `/api/inspect` | 영상 정보 확인 — `{ url }` → 제목·썸네일·길이·화질 옵션(용량 포함) |
 | POST | `/api/download` | 다운로드 시작 — `{ url, type: "video" \| "audio", quality?: "best" \| "<height>" }` |
 | GET | `/api/downloads` | 다운로드된 항목(폴더) 목록 |
-| GET | `/api/item/:folder` | 항목 상세 — 파일 목록 + INFO.md + 스크립트(script.json) 내용 |
+| GET | `/api/item/:folder` | 항목 상세 — 파일 목록 + INFO.md + 스크립트(script.json) + 원본 URL(sourceUrl) |
 | POST | `/api/transcribe` | 스크립트 변환 시작 — `{ folder }` (Whisper 로컬 변환) |
 | GET | `/api/transcribe/:id` | 변환 작업 상태 |
 | POST | `/api/annotations` | 하이라이트/메모 추가 — `{ folder, type, start, end, text, note? }` → `notes.json`·`NOTES.md` 저장 |

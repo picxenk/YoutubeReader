@@ -570,6 +570,15 @@ button:disabled {
   color: #0071e3;
 }
 
+a.segment-time {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+a.segment-time:hover {
+  text-decoration-style: solid;
+}
+
 .segment-text {
   font-size: 14px;
   line-height: 1.55;
