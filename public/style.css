@@ -570,6 +570,40 @@ button:disabled {
   color: #0071e3;
 }
 
+.seg-fold {
+  flex-shrink: 0;
+  width: 18px;
+  height: 26px;
+  margin-top: 1px;
+  padding: 0;
+  border-radius: 4px;
+  color: #6e6e73;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.seg-fold:hover {
+  color: #0071e3;
+  background: #e8f0fe;
+}
+
+.seg-fold-slot {
+  flex-shrink: 0;
+  width: 18px;
+}
+
+.seg-children {
+  margin-left: 18px;
+  padding-left: 8px;
+  border-left: 2px solid #e2e2e5;
+}
+
+.seg-group.collapsed > .seg-children {
+  display: none;
+}
+
 a.segment-time {
   text-decoration: underline dotted;
   text-underline-offset: 3px;
@@ -692,6 +726,14 @@ a.segment-time:hover {
   background: rgba(255, 255, 255, 0.15);
 }
 
+.selection-menu button:disabled {
+  opacity: 0.35;
+}
+
+.selection-menu button:disabled:hover {
+  background: none;
+}
+
 .selection-menu button.primary {
   background: #0071e3;
 }
@@ -727,7 +769,9 @@ a.segment-time:hover {
 }
 
 .segment-play,
-.segment-time {
+.segment-time,
+.seg-fold,
+.seg-fold-slot {
   -webkit-user-select: none;
   user-select: none;
 }

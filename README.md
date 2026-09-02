@@ -58,6 +58,8 @@ npm start
 
 스크립트에서 드래그하면 문장 단위로 선택되며, 복사하면 마지막에 `[시작시간 : 끝시간 - 영상제목]` 인용 줄이 자동으로 함께 들어간다.
 
+선택한 문장에 `들여쓰기`를 적용하면 그 문장들이 바로 앞 1단계 문장의 2단계 하위로 들어가고, `내어쓰기`로 다시 뺄 수 있다. 하위 문장이 생긴 1단계 문장에는 ▾ 접기 버튼이 붙어 하위를 접었다 펼 수 있고, 스크립트 상단의 `모두 접기` 버튼으로 한 번에 조절한다. Sync 재생이 접힌 하위 문장에 도달하면 해당 그룹은 자동으로 펼쳐진다. 이 구조는 `outline.json`(2단계 구간의 시각 범위)에 저장되므로 스크립트를 재추출해도 대부분 유지된다.
+
 문장을 클릭하거나 드래그해 선택하면 하이라이트/메모 메뉴가 자동으로 뜬다. 하이라이트는 문장에 형광펜 배경을 칠하고, 메모는 문장 아래 메모 상자로 남는다. 모든 주석은 폴더에 `notes.json`(데이터)과 `NOTES.md`(마크다운)로 저장되며, 재추출 버튼 옆의 `하이라이트·메모` 버튼으로 마크다운 형식으로 한 번에 볼 수 있다. 이 전체보기에서도 원본이 유튜브 영상이면 각 주석의 시간이 링크가 되어 클릭 시 해당 시간부터 재생되는 유튜브 페이지가 새 탭에 열린다.
 
 Whisper 엔진은 프로젝트 로컬 venv에 설치한다 (Apple Silicon 기준, mlx-whisper):
@@ -85,6 +87,7 @@ downloads/
 
 - 영상 다운로드 시 음성(mp3)이 항상 함께 저장된다.
 - `INFO.md`에는 원본 URL, 채널, 길이, 업로드일, 화질, 다운로드일, 파일 목록이 기록된다.
+- 스크립트 추출 시 `script.json`(앱용)·`SCRIPT.md`(읽기용), 주석 저장 시 `notes.json`·`NOTES.md`, 들여쓰기 구조는 `outline.json`이 같은 폴더에 함께 저장된다.
 - 이전 버전처럼 `downloads/`에 바로 저장된 파일은 서버 시작 시 폴더 구조로 자동 마이그레이션된다.
 
 ## API
@@ -94,7 +97,8 @@ downloads/
 | POST | `/api/inspect` | 영상 정보 확인 — `{ url }` → 제목·썸네일·길이·화질 옵션(용량 포함) |
 | POST | `/api/download` | 다운로드 시작 — `{ url, type: "video" \| "audio", quality?: "best" \| "<height>" }` |
 | GET | `/api/downloads` | 다운로드된 항목(폴더) 목록 |
-| GET | `/api/item/:folder` | 항목 상세 — 파일 목록 + INFO.md + 스크립트(script.json) + 원본 URL(sourceUrl) |
+| GET | `/api/item/:folder` | 항목 상세 — 파일 목록 + INFO.md + 스크립트(script.json) + 원본 URL(sourceUrl) + 아웃라인(outline) |
+| PUT | `/api/outline` | 들여쓰기 구조 저장 — `{ folder, indents: [{ start, end }] }` 전체 교체 (겹침 병합·검증 후 정규화된 목록 반환) |
 | POST | `/api/transcribe` | 스크립트 변환 시작 — `{ folder }` (Whisper 로컬 변환) |
 | GET | `/api/transcribe/:id` | 변환 작업 상태 |
 | POST | `/api/annotations` | 하이라이트/메모 추가 — `{ folder, type, start, end, text, note? }` → `notes.json`·`NOTES.md` 저장 |

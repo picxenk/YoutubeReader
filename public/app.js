@@ -32,6 +32,12 @@ let viewedFolder = null;
 let viewedTitle = null;
 let viewedSourceUrl = null;
 let viewedAnnotations = [];
+let viewedSegments = [];
+let viewedIndents = [];
+let scriptMediaEl = null;
+let segmentEls = [];
+let programmaticSeek = false;
+let activeSegmentIndex = -1;
 let selectedSegments = null;
 let lastMenuPos = { x: 0, y: 0 };
 let transcribeJobId = null;
@@ -399,6 +405,8 @@ function renderViewer(item) {
   viewedFolder = item.folder;
   viewedSourceUrl = item.sourceUrl || null;
   viewedAnnotations = Array.isArray(item.annotations) ? item.annotations : [];
+  viewedSegments = item.script && Array.isArray(item.script.segments) ? item.script.segments : [];
+  viewedIndents = item.outline && Array.isArray(item.outline.indents) ? item.outline.indents : [];
   const videoFile = item.files.find((f) => f.type === "video");
   const audioFile = item.files.find((f) => f.type === "audio");
   const hasScript = !!(item.script && Array.isArray(item.script.segments) && item.script.segments.length > 0);
@@ -448,6 +456,7 @@ function renderScriptSection(item) {
   if (script) {
     html += `
       <div class="viewer-script-actions">
+        <button id="collapse-all-button" class="transcribe-again" type="button">모두 접기</button>
         <button id="annotations-view-button" class="transcribe-again" type="button">하이라이트·메모</button>
         <button id="transcribe-button" class="transcribe-again" type="button">재추출</button>
       </div>
@@ -464,25 +473,134 @@ function renderScriptSection(item) {
     }
   }
   html += '<div id="script-status" class="script-status hidden"></div>';
-  if (script && Array.isArray(script.segments)) {
-    for (const seg of script.segments) {
-      const ytUrl = youtubeTimeUrl(item.sourceUrl, seg.start);
-      const timeHtml = ytUrl
-        ? `<a class="segment-time" href="${escapeHtml(ytUrl)}" target="_blank" rel="noreferrer" title="유튜브에서 이 시간부터 열기">${formatTimestamp(seg.start)}</a>`
-        : `<span class="segment-time">${formatTimestamp(seg.start)}</span>`;
-      html += `
-        <div class="segment" data-start="${seg.start}" data-end="${seg.end}">
-          <div class="segment-line">
-            <button class="segment-play" type="button" title="이 위치에서 재생">▶</button>
-            ${timeHtml}
-            <span class="segment-text">${escapeHtml(seg.text)}</span>
-          </div>
-        </div>
-      `;
-    }
-  }
+  html += '<div id="segments-container"></div>';
   html += "</div>";
   return html;
+}
+
+function isIndented(seg) {
+  return viewedIndents.some((r) => seg.start >= r.start && seg.start <= r.end);
+}
+
+function segmentHtml(seg, opts = {}) {
+  const ytUrl = youtubeTimeUrl(viewedSourceUrl, seg.start);
+  const timeHtml = ytUrl
+    ? `<a class="segment-time" href="${escapeHtml(ytUrl)}" target="_blank" rel="noreferrer" title="유튜브에서 이 시간부터 열기">${formatTimestamp(seg.start)}</a>`
+    : `<span class="segment-time">${formatTimestamp(seg.start)}</span>`;
+  const foldHtml = opts.fold
+    ? '<button class="seg-fold" type="button" title="하위 문장 접기">▾</button>'
+    : opts.slot
+      ? '<span class="seg-fold-slot"></span>'
+      : "";
+  return `
+    <div class="segment" data-start="${seg.start}" data-end="${seg.end}">
+      <div class="segment-line">
+        ${foldHtml}
+        <button class="segment-play" type="button" title="이 위치에서 재생">▶</button>
+        ${timeHtml}
+        <span class="segment-text">${escapeHtml(seg.text)}</span>
+      </div>
+    </div>
+  `;
+}
+
+function segmentsHtml() {
+  const levels = viewedSegments.map((seg) => (isIndented(seg) ? 2 : 1));
+  const firstTop = levels.indexOf(1);
+  for (let i = 0; i < (firstTop === -1 ? levels.length : firstTop); i++) levels[i] = 1;
+
+  let html = "";
+  let i = 0;
+  while (i < viewedSegments.length) {
+    let j = i + 1;
+    while (j < viewedSegments.length && levels[j] === 2) j++;
+    if (levels[i] === 1 && j > i + 1) {
+      html += '<div class="seg-group">';
+      html += segmentHtml(viewedSegments[i], { fold: true });
+      html += '<div class="seg-children">';
+      for (let k = i + 1; k < j; k++) html += segmentHtml(viewedSegments[k]);
+      html += "</div></div>";
+      i = j;
+    } else {
+      html += segmentHtml(viewedSegments[i], { slot: levels[i] === 1 });
+      i++;
+    }
+  }
+  return html;
+}
+
+function renderSegments() {
+  const container = document.getElementById("segments-container");
+  if (!container || viewedSegments.length === 0) return;
+  container.innerHTML = segmentsHtml();
+  segmentEls = [...container.querySelectorAll(".segment")].map((el) => ({
+    el,
+    start: parseFloat(el.dataset.start),
+    end: parseFloat(el.dataset.end),
+  }));
+  activeSegmentIndex = -1;
+  programmaticSeek = false;
+  const collapseAllButton = document.getElementById("collapse-all-button");
+  if (collapseAllButton) collapseAllButton.textContent = "모두 접기";
+  wireSegmentEvents(container);
+  applyAnnotationsToSegments();
+}
+
+function wireSegmentEvents(container) {
+  container.querySelectorAll(".seg-fold").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const group = btn.closest(".seg-group");
+      if (group) setGroupCollapsed(group, !group.classList.contains("collapsed"));
+    });
+  });
+  container.querySelectorAll(".segment-play, span.segment-time").forEach((el) => {
+    el.addEventListener("click", () => {
+      if (!scriptMediaEl) return;
+      const segment = el.closest(".segment");
+      const start = parseFloat(segment.dataset.start);
+      if (!Number.isFinite(start)) return;
+      programmaticSeek = true;
+      scriptMediaEl.currentTime = start;
+      scriptMediaEl.play().catch(() => {});
+    });
+  });
+}
+
+function setGroupCollapsed(group, collapsed) {
+  group.classList.toggle("collapsed", collapsed);
+  const btn = group.querySelector(".seg-fold");
+  if (btn) {
+    btn.textContent = collapsed ? "▸" : "▾";
+    btn.title = collapsed ? "하위 문장 펼치기" : "하위 문장 접기";
+  }
+}
+
+function expandGroupOfSegment(el) {
+  const group = el.closest(".seg-group");
+  if (group && group.classList.contains("collapsed")) setGroupCollapsed(group, false);
+}
+
+function findSegmentIndexForTime(time) {
+  for (let i = 0; i < segmentEls.length; i++) {
+    if (time >= segmentEls[i].start && time < segmentEls[i].end) return i;
+  }
+  for (let i = 0; i < segmentEls.length; i++) {
+    if (segmentEls[i].start > time) return i;
+  }
+  return segmentEls.length - 1;
+}
+
+function setActiveIndex(index) {
+  if (index === activeSegmentIndex) return;
+  activeSegmentIndex = index;
+  segmentEls.forEach((s, i) => s.el.classList.toggle("active", i === index));
+}
+
+function scrollToSegment(index) {
+  if (index < 0 || index >= segmentEls.length) return;
+  const el = segmentEls[index].el;
+  expandGroupOfSegment(el);
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 function syncToggleHtml() {
@@ -510,82 +628,51 @@ function wireScriptInteractions(item) {
       }
     });
   }
+  const collapseAllButton = document.getElementById("collapse-all-button");
+  if (collapseAllButton) {
+    collapseAllButton.addEventListener("click", () => {
+      const groups = [...viewerContent.querySelectorAll(".seg-group")];
+      const anyExpanded = groups.some((g) => !g.classList.contains("collapsed"));
+      groups.forEach((g) => setGroupCollapsed(g, anyExpanded));
+      collapseAllButton.textContent = anyExpanded ? "모두 펼치기" : "모두 접기";
+    });
+  }
   if (!item.script || !Array.isArray(item.script.segments) || item.script.segments.length === 0) return;
-  const mediaEl = viewerContent.querySelector("video") || viewerContent.querySelector("audio");
-  if (!mediaEl) return;
+  scriptMediaEl = viewerContent.querySelector("video") || viewerContent.querySelector("audio");
 
-  const segments = [...viewerContent.querySelectorAll(".segment")].map((el) => ({
-    el,
-    start: parseFloat(el.dataset.start),
-    end: parseFloat(el.dataset.end),
-  }));
+  if (scriptMediaEl) {
+    const syncToggle = document.getElementById("sync-toggle");
+    if (syncToggle) {
+      syncToggle.checked = localStorage.getItem(SYNC_STORAGE_KEY) === "1";
+      syncToggle.addEventListener("change", () => {
+        localStorage.setItem(SYNC_STORAGE_KEY, syncToggle.checked ? "1" : "0");
+        if (syncToggle.checked) {
+          scrollToSegment(findSegmentIndexForTime(scriptMediaEl.currentTime));
+        }
+      });
+    }
 
-  const syncToggle = document.getElementById("sync-toggle");
-  let programmaticSeek = false;
-  let activeIndex = -1;
-
-  if (syncToggle) {
-    syncToggle.checked = localStorage.getItem(SYNC_STORAGE_KEY) === "1";
-    syncToggle.addEventListener("change", () => {
-      localStorage.setItem(SYNC_STORAGE_KEY, syncToggle.checked ? "1" : "0");
-      if (syncToggle.checked) {
-        scrollToSegment(findSegmentIndexForTime(mediaEl.currentTime));
+    scriptMediaEl.addEventListener("timeupdate", () => {
+      const index = findSegmentIndexForTime(scriptMediaEl.currentTime);
+      const changed = index !== activeSegmentIndex;
+      setActiveIndex(index);
+      if (changed && syncToggle && syncToggle.checked) {
+        scrollToSegment(index);
       }
     });
-  }
 
-  viewerContent.querySelectorAll(".segment-play, span.segment-time").forEach((el) => {
-    el.addEventListener("click", () => {
-      const segment = el.closest(".segment");
-      const start = parseFloat(segment.dataset.start);
-      if (!Number.isFinite(start)) return;
-      programmaticSeek = true;
-      mediaEl.currentTime = start;
-      mediaEl.play().catch(() => {});
-    });
-  });
-
-  function findSegmentIndexForTime(time) {
-    for (let i = 0; i < segments.length; i++) {
-      if (time >= segments[i].start && time < segments[i].end) return i;
-    }
-    for (let i = 0; i < segments.length; i++) {
-      if (segments[i].start > time) return i;
-    }
-    return segments.length - 1;
-  }
-
-  function setActiveIndex(index) {
-    if (index === activeIndex) return;
-    activeIndex = index;
-    segments.forEach((s, i) => s.el.classList.toggle("active", i === index));
-  }
-
-  function scrollToSegment(index) {
-    if (index < 0 || index >= segments.length) return;
-    segments[index].el.scrollIntoView({ behavior: "smooth", block: "center" });
-  }
-
-  mediaEl.addEventListener("timeupdate", () => {
-    const index = findSegmentIndexForTime(mediaEl.currentTime);
-    const changed = index !== activeIndex;
-    setActiveIndex(index);
-    if (changed && syncToggle && syncToggle.checked) {
+    scriptMediaEl.addEventListener("seeking", () => {
+      if (programmaticSeek) {
+        programmaticSeek = false;
+        return;
+      }
+      const index = findSegmentIndexForTime(scriptMediaEl.currentTime);
+      setActiveIndex(index);
       scrollToSegment(index);
-    }
-  });
+    });
+  }
 
-  mediaEl.addEventListener("seeking", () => {
-    if (programmaticSeek) {
-      programmaticSeek = false;
-      return;
-    }
-    const index = findSegmentIndexForTime(mediaEl.currentTime);
-    setActiveIndex(index);
-    scrollToSegment(index);
-  });
-
-  applyAnnotationsToSegments();
+  renderSegments();
 }
 
 function applyAnnotationsToSegments() {
@@ -664,7 +751,7 @@ function wireScriptSelection() {
 
   document.addEventListener("mouseup", (event) => {
     if (event.target.closest(".selection-menu")) return;
-    if (event.target.closest(".segment-play, .segment-time")) return;
+    if (event.target.closest(".segment-play, .segment-time, .seg-fold")) return;
     const segments = snapSelectionToSegments();
     if (segments) {
       showSelectionMenu(segments, event.clientX, event.clientY);
@@ -703,6 +790,10 @@ function wireScriptSelection() {
       saveSelectionAnnotation("note", noteInput.value);
     } else if (action === "note-cancel") {
       showSelectionMenuActions();
+    } else if (action === "indent") {
+      applyIndentation(true);
+    } else if (action === "outdent") {
+      applyIndentation(false);
     } else if (action === "remove") {
       removeSelectionAnnotations();
     }
@@ -729,6 +820,11 @@ function showSelectionMenu(segments, x, y) {
     (a) => a.start < segments[segments.length - 1].end && a.end > segments[0].start
   );
   selectionMenuEl.querySelector('[data-action="remove"]').classList.toggle("hidden", !hasExisting);
+  const firstSegmentEl = viewerContent.querySelector(".segment");
+  const indentButton = selectionMenuEl.querySelector('[data-action="indent"]');
+  const outdentButton = selectionMenuEl.querySelector('[data-action="outdent"]');
+  if (indentButton) indentButton.disabled = !firstSegmentEl || segments[0].el === firstSegmentEl;
+  if (outdentButton) outdentButton.disabled = !segments.some((s) => s.el.closest(".seg-children"));
   selectionMenuEl.classList.remove("hidden");
   positionSelectionMenu(x, y);
 }
@@ -852,7 +948,7 @@ function getScriptSelectionSegments() {
   };
   if (inNoteBox(range.startContainer) || inNoteBox(range.endContainer)) return null;
   const segments = [...scriptEl.querySelectorAll(".segment")]
-    .filter((el) => range.intersectsNode(el))
+    .filter((el) => range.intersectsNode(el) && el.offsetParent !== null)
     .map((el) => {
       const textEl = el.querySelector(".segment-text");
       return {
@@ -878,6 +974,50 @@ function snapSelectionToSegments() {
   selection.removeAllRanges();
   selection.addRange(range);
   return segments;
+}
+
+async function applyIndentation(indent) {
+  const segments = selectedSegments;
+  if (!segments || segments.length === 0 || !viewedFolder || viewedSegments.length === 0) return;
+  const selectedEls = new Set(segments.map((s) => s.el));
+  const allEls = [...viewerContent.querySelectorAll(".segment")];
+  const starts = viewedSegments.map((s) => Number(s.start));
+  const levels = allEls.map((el, i) => {
+    if (selectedEls.has(el)) return indent ? 2 : 1;
+    return viewedIndents.some((r) => starts[i] >= r.start && starts[i] <= r.end) ? 2 : 1;
+  });
+  let i = 0;
+  while (i < levels.length && levels[i] === 2) levels[i++] = 1;
+  const indents = [];
+  while (i < levels.length) {
+    if (levels[i] === 2) {
+      let j = i;
+      while (j < levels.length && levels[j] === 2) j++;
+      indents.push({ start: starts[i], end: starts[j - 1] });
+      i = j;
+    } else {
+      i++;
+    }
+  }
+  try {
+    const res = await fetch("/api/outline", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folder: viewedFolder, indents }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || "저장에 실패했습니다.");
+      return;
+    }
+    viewedIndents = Array.isArray(data.indents) ? data.indents : [];
+  } catch {
+    alert("서버에 연결할 수 없습니다.");
+    return;
+  }
+  hideSelectionMenu();
+  window.getSelection().removeAllRanges();
+  renderSegments();
 }
 
 async function startTranscription(folder) {
@@ -967,6 +1107,11 @@ function showScriptError(message) {
 function resetViewer() {
   viewedFolder = null;
   viewedSourceUrl = null;
+  viewedSegments = [];
+  viewedIndents = [];
+  scriptMediaEl = null;
+  segmentEls = [];
+  activeSegmentIndex = -1;
   viewerContent.innerHTML = "";
   viewerContent.classList.add("hidden");
   viewerEmpty.classList.remove("hidden");

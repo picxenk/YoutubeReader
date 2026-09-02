@@ -6,6 +6,7 @@ const downloader = require("./downloader");
 const inspector = require("./inspector");
 const transcriber = require("./transcriber");
 const annotations = require("./annotations");
+const outline = require("./outline");
 
 const PORT = Number(process.env.PORT) || 3000;
 
@@ -103,6 +104,7 @@ async function main() {
       res.json({
         ...item,
         annotations: await annotations.readAnnotations(req.params.folder),
+        outline: await outline.readOutline(req.params.folder),
         transcriber: { available: !!transcriber.deps.engine, engine: transcriber.deps.engine },
       });
     } catch (err) {
@@ -128,6 +130,16 @@ async function main() {
     const result = await annotations.removeAnnotation({ folder: folder.trim(), id: id.trim() });
     if (result.error) return res.status(result.error).json({ error: result.message });
     res.json({ ok: true });
+  });
+
+  app.put("/api/outline", async (req, res) => {
+    const { folder, indents } = req.body || {};
+    if (typeof folder !== "string" || !folder.trim()) {
+      return res.status(400).json({ error: "폴더를 지정해 주세요." });
+    }
+    const result = await outline.saveOutline(folder.trim(), indents);
+    if (result.error) return res.status(result.error).json({ error: result.message });
+    res.json({ ok: true, indents: result.indents });
   });
 
   app.post("/api/transcribe", async (req, res) => {
