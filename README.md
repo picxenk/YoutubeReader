@@ -1,4 +1,4 @@
-- 첫 ROJECT.md 스펙문서는 ChatGPT 무료버전에서 생성되었습니다. (2026-09-02)
+- 첫 PROJECT.md 스펙문서는 ChatGPT 무료버전에서 생성되었습니다. (2026-09-02)
 - Coded by picxenk with GLM-5.2(OpenCode Zen, ~$10)
 
 # YoutubeReader
