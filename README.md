@@ -1,3 +1,6 @@
+- 첫 ROJECT.md 스펙문서는 ChatGPT 무료버전에서 생성되었습니다. (2026-09-02)
+- Coded by picxenk with GLM-5.2(OpenCode Zen, ~$10)
+
 # YoutubeReader
 
 yt-dlp 기반 유튜브 영상·음성 다운로드 로컬 웹앱. URL을 입력하면 받을 수 있는 화질과 용량을 확인하고 선택해서 다운로드할 수 있다. 각 영상은 개별 폴더로 관리되며 영상(mp4)과 음성(mp3), 그리고 원본 URL 등의 정보를 담은 `INFO.md`가 함께 저장된다. 상단 탭에서 다운로더와 뷰어(읽기)를 오갈 수 있다.
