@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YoutubeReader</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main class="container">
+    <h1>YoutubeReader</h1>
+
+    <nav class="tabs">
+      <button class="tab active" type="button" data-tab="downloader">다운로더</button>
+      <button class="tab" type="button" data-tab="viewer">뷰어</button>
+    </nav>
+
+    <section id="tab-downloader">
+      <section class="card">
+        <form id="inspect-form">
+          <div class="url-row">
+            <input
+              id="url-input"
+              type="text"
+              placeholder="https://www.youtube.com/watch?v=..."
+              autocomplete="off"
+              autofocus
+            />
+            <button id="inspect-button" type="submit">확인</button>
+          </div>
+        </form>
+
+        <div id="video-info" class="video-info hidden">
+          <div class="video-head">
+            <img id="video-thumbnail" alt="" />
+            <div class="video-meta">
+              <div id="video-title"></div>
+              <div id="video-sub"></div>
+            </div>
+          </div>
+          <div id="options"></div>
+          <button id="download-button" type="button">다운로드</button>
+        </div>
+
+        <div id="status" class="status hidden"></div>
+      </section>
+
+      <section class="downloads">
+        <h2>Downloads <span id="file-count" class="file-count"></span></h2>
+        <div id="file-list"></div>
+      </section>
+    </section>
+
+    <section id="tab-viewer" class="hidden">
+      <div id="viewer-empty" class="empty">목록에서 [읽기]를 누르면 이곳에서 내용을 볼 수 있습니다.</div>
+      <div id="viewer-content" class="hidden"></div>
+    </section>
+  </main>
+
+  <div id="selection-menu" class="selection-menu hidden">
+    <div class="selection-menu-actions">
+      <button type="button" data-action="highlight">하이라이트</button>
+      <button type="button" data-action="note">메모</button>
+      <button type="button" data-action="remove" class="hidden">제거</button>
+    </div>
+    <div class="selection-menu-note hidden">
+      <textarea id="note-input" placeholder="메모 내용을 입력하세요"></textarea>
+      <div class="note-actions">
+        <button type="button" data-action="note-cancel">취소</button>
+        <button type="button" data-action="note-save" class="primary">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

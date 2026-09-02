@@ -1,0 +1,17 @@
+{
+  "name": "youtubereader",
+  "version": "0.2.0",
+  "private": true,
+  "description": "yt-dlp 기반 유튜브 영상·음성 다운로드 로컬 웹앱",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "engines": {
+    "node": ">=18.11"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
