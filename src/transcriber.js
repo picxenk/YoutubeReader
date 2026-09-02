@@ -9,17 +9,24 @@ const { safeItemPath, fileTypeOf, formatTimestamp } = require("./files");
 const jobs = new Map();
 let currentJobId = null;
 
-const VENV_WHISPER = path.join(__dirname, "..", ".venv-whisper", "bin", "mlx_whisper");
+const VENV_PYTHON = path.join(__dirname, "..", ".venv-whisper", "bin", "python3");
+const VENV_MODULE = "mlx_whisper.cli";
 const WHISPER_MODEL = process.env.WHISPER_MODEL || "mlx-community/whisper-small-mlx";
 const TRANSCRIBE_TIMEOUT = 30 * 60 * 1000;
 
-const deps = { engine: null, command: null, model: WHISPER_MODEL };
+const deps = { engine: null, command: null, module: null, model: WHISPER_MODEL };
 
-function commandWorks(command) {
+function commandModuleArgs(module) {
+  return module ? ["-m", module] : [];
+}
+
+function commandWorks(command, module) {
   return new Promise((resolve) => {
     let child;
     try {
-      child = spawn(command, ["--help"], { stdio: ["ignore", "ignore", "ignore"] });
+      child = spawn(command, [...commandModuleArgs(module), "--help"], {
+        stdio: ["ignore", "ignore", "ignore"],
+      });
     } catch {
       resolve(false);
       return;
@@ -31,19 +38,21 @@ function commandWorks(command) {
 
 async function checkTranscriber() {
   const candidates = [
-    { engine: "mlx_whisper", command: process.env.WHISPER_COMMAND || "mlx_whisper" },
-    { engine: "mlx_whisper", command: VENV_WHISPER },
-    { engine: "openai_whisper", command: "whisper" },
+    { engine: "mlx_whisper", command: process.env.WHISPER_COMMAND || "mlx_whisper", module: null },
+    { engine: "mlx_whisper", command: VENV_PYTHON, module: VENV_MODULE },
+    { engine: "openai_whisper", command: "whisper", module: null },
   ];
   for (const candidate of candidates) {
-    if (await commandWorks(candidate.command)) {
+    if (await commandWorks(candidate.command, candidate.module)) {
       deps.engine = candidate.engine;
       deps.command = candidate.command;
+      deps.module = candidate.module;
       return deps;
     }
   }
   deps.engine = null;
   deps.command = null;
+  deps.module = null;
   return deps;
 }
 
@@ -137,7 +146,10 @@ function runEngine(mediaPath, outDir) {
   return new Promise((resolve, reject) => {
     let child;
     try {
-      child = spawn(deps.command, engineArgs(deps.engine, mediaPath, outDir), {
+      child = spawn(deps.command, [
+        ...commandModuleArgs(deps.module),
+        ...engineArgs(deps.engine, mediaPath, outDir),
+      ], {
         stdio: ["ignore", "ignore", "pipe"],
         env: { ...process.env, PYTHONUNBUFFERED: "1" },
       });
