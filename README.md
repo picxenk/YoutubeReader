@@ -1,4 +1,5 @@
 - 첫 PROJECT.md 스펙문서는 ChatGPT 무료버전에서 생성되었습니다. (2026-09-02)
+ - https://chatgpt.com/share/6a981680-9b78-83ee-a3d0-eef074cd6986
 - Coded by picxenk with GLM-5.2(OpenCode Zen, ~$10)
 
 # YoutubeReader
