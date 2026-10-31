@@ -62,7 +62,15 @@ fi
 echo "서버를 시작합니다: http://localhost:$PORT"
 echo "중지하려면 Ctrl+C 를 누르거나 이 창을 닫으면 됩니다."
 echo
-( sleep 1.5; open "http://localhost:$PORT" ) &
+(
+  for _ in $(seq 1 120); do
+    if curl -s -o /dev/null --max-time 1 "http://localhost:$PORT/"; then
+      break
+    fi
+    sleep 0.25
+  done
+  open "http://localhost:$PORT"
+) &
 
 npm start
 STATUS=$?

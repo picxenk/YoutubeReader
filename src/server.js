@@ -27,10 +27,7 @@ function getUrl(body) {
   return { url: trimmed };
 }
 
-async function main() {
-  files.ensureDownloadsDir();
-  await files.migrateLegacyFiles();
-
+async function checkDownloaderDeps() {
   const deps = await downloader.checkDependencies();
   if (!deps.ytDlp) {
     console.error("[오류] yt-dlp를 찾을 수 없습니다. 설치 후 다시 실행해 주세요.");
@@ -45,7 +42,9 @@ async function main() {
   } else {
     console.log(`ffmpeg ${deps.ffmpeg}`);
   }
+}
 
+async function checkTranscriberDeps() {
   await transcriber.checkTranscriber();
   if (transcriber.deps.engine) {
     console.log(`Whisper: ${transcriber.deps.engine} (${transcriber.deps.command}) · 모델 ${transcriber.deps.model}`);
@@ -53,6 +52,16 @@ async function main() {
     console.warn("[경고] Whisper 엔진을 찾을 수 없습니다. 스크립트 추출을 사용할 수 없습니다.");
     console.warn("  설치: python3 -m venv .venv-whisper && .venv-whisper/bin/pip install mlx-whisper");
   }
+}
+
+async function main() {
+  files.ensureDownloadsDir();
+  await files.migrateLegacyFiles();
+
+  // 서버를 먼저 열고 외부 도구 검사는 백그라운드에서 진행한다.
+  // 검사 결과가 필요한 API는 이 Promise를 기다린다.
+  const downloaderReady = checkDownloaderDeps();
+  const transcriberReady = checkTranscriberDeps();
 
   const app = express();
   app.use(express.json());
@@ -61,6 +70,7 @@ async function main() {
   app.post("/api/inspect", async (req, res) => {
     const urlCheck = getUrl(req.body);
     if (urlCheck.error) return res.status(400).json({ error: urlCheck.error });
+    await downloaderReady;
     try {
       res.json(await inspector.inspect(urlCheck.url));
     } catch (err) {
@@ -68,7 +78,8 @@ async function main() {
     }
   });
 
-  app.post("/api/download", (req, res) => {
+  app.post("/api/download", async (req, res) => {
+    await downloaderReady;
     const { type, quality } = req.body || {};
     const urlCheck = getUrl(req.body);
     if (urlCheck.error) return res.status(400).json({ error: urlCheck.error });
@@ -101,6 +112,7 @@ async function main() {
     try {
       const item = await files.getItem(req.params.folder);
       if (!item) return res.status(404).json({ error: "항목을 찾을 수 없습니다." });
+      await transcriberReady;
       res.json({
         ...item,
         annotations: await annotations.readAnnotations(req.params.folder),
@@ -147,6 +159,7 @@ async function main() {
     if (typeof folder !== "string" || !folder.trim()) {
       return res.status(400).json({ error: "폴더를 지정해 주세요." });
     }
+    await transcriberReady;
     const result = await transcriber.startTranscribe(folder.trim());
     if (result.error) return res.status(result.error).json({ error: result.message });
     res.status(202).json({ id: result.job.id, status: result.job.status });

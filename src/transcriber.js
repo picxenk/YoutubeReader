@@ -20,20 +20,47 @@ function commandModuleArgs(module) {
   return module ? ["-m", module] : [];
 }
 
-function commandWorks(command, module) {
-  return new Promise((resolve) => {
-    let child;
-    try {
-      child = spawn(command, [...commandModuleArgs(module), "--help"], {
-        stdio: ["ignore", "ignore", "ignore"],
-      });
-    } catch {
-      resolve(false);
-      return;
-    }
-    child.on("error", () => resolve(false));
-    child.on("close", (code) => resolve(code === 0));
-  });
+async function isExecutable(file) {
+  try {
+    const stat = await fsp.stat(file);
+    if (!stat.isFile()) return false;
+    await fsp.access(file, fs.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function findOnPath(command) {
+  if (command.includes(path.sep)) return isExecutable(command);
+  const dirs = (process.env.PATH || "").split(path.delimiter).filter(Boolean);
+  for (const dir of dirs) {
+    if (await isExecutable(path.join(dir, command))) return true;
+  }
+  return false;
+}
+
+// 설치 여부만 파일 시스템으로 확인한다. `--help` 실행은 Python과 mlx를 불러와 수 초가 걸린다.
+async function venvHasModule(module) {
+  const libDir = path.join(path.dirname(path.dirname(VENV_PYTHON)), "lib");
+  const pkg = module.split(".")[0];
+  let names;
+  try {
+    names = await fsp.readdir(libDir);
+  } catch {
+    return false;
+  }
+  for (const name of names) {
+    if (!name.startsWith("python")) continue;
+    if (fs.existsSync(path.join(libDir, name, "site-packages", pkg))) return true;
+  }
+  return false;
+}
+
+async function commandExists(command, module) {
+  if (!(await findOnPath(command))) return false;
+  if (module) return venvHasModule(module);
+  return true;
 }
 
 async function checkTranscriber() {
@@ -43,7 +70,7 @@ async function checkTranscriber() {
     { engine: "openai_whisper", command: "whisper", module: null },
   ];
   for (const candidate of candidates) {
-    if (await commandWorks(candidate.command, candidate.module)) {
+    if (await commandExists(candidate.command, candidate.module)) {
       deps.engine = candidate.engine;
       deps.command = candidate.command;
       deps.module = candidate.module;
@@ -70,6 +97,7 @@ async function startTranscribe(folderName) {
   if (!fs.existsSync(dir)) return { error: 404, message: "항목이 존재하지 않습니다." };
   const mediaName = await findMediaFile(dir);
   if (!mediaName) return { error: 400, message: "이 항목에는 변환할 미디어 파일이 없습니다." };
+  if (!deps.engine) await checkTranscriber();
   if (!deps.engine) {
     return {
       error: 400,
