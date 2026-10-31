@@ -46,7 +46,11 @@ npm start
 1. URL 입력 후 `확인` 클릭 — 영상 제목·썸네일·길이와 함께 받을 수 있는 화질 목록(해상도·예상 용량)이 표시된다.
 2. 화질을 선택하거나 `음성만(MP3)`을 선택한다. 영상을 고르면 MP4와 별도의 MP3가 항상 함께 저장된다.
 3. `다운로드` 클릭 — 진행률·속도·ETA가 실시간으로 표시된다.
-4. Downloads 목록에서 `읽기`(뷰어 탭에서 열기) 또는 `삭제`(폴더 전체 삭제)를 쓸 수 있다.
+4. Downloads 목록에서 `읽기`(뷰어 탭에서 열기) 또는 `아카이브`(다 본 항목을 아카이브 탭으로 이동)를 쓸 수 있다.
+
+### 아카이브 탭
+
+다 본 항목을 모아 두는 곳이다. `읽기`, `복원`(다운로더 목록으로 되돌리기), `삭제`(폴더 전체 삭제)를 쓸 수 있다. 삭제는 아카이브 탭에서만 가능하다.
 
 ### 뷰어 탭
 
@@ -87,7 +91,7 @@ downloads/
 
 - 영상 다운로드 시 음성(mp3)이 항상 함께 저장된다.
 - `INFO.md`에는 원본 URL, 채널, 길이, 업로드일, 화질, 다운로드일, 파일 목록이 기록된다.
-- 스크립트 추출 시 `script.json`(앱용)·`SCRIPT.md`(읽기용), 주석 저장 시 `notes.json`·`NOTES.md`, 들여쓰기 구조는 `outline.json`이 같은 폴더에 함께 저장된다.
+- 스크립트 추출 시 `script.json`(앱용)·`SCRIPT.md`(읽기용), 주석 저장 시 `notes.json`·`NOTES.md`, 들여쓰기 구조는 `outline.json`, 아카이브 상태는 `archive.json`이 같은 폴더에 함께 저장된다.
 - 이전 버전처럼 `downloads/`에 바로 저장된 파일은 서버 시작 시 폴더 구조로 자동 마이그레이션된다.
 
 ## API
@@ -99,6 +103,7 @@ downloads/
 | GET | `/api/downloads` | 다운로드된 항목(폴더) 목록 |
 | GET | `/api/item/:folder` | 항목 상세 — 파일 목록 + INFO.md + 스크립트(script.json) + 원본 URL(sourceUrl) + 아웃라인(outline) |
 | PUT | `/api/outline` | 들여쓰기 구조 저장 — `{ folder, indents: [{ start, end }] }` 전체 교체 (겹침 병합·검증 후 정규화된 목록 반환) |
+| PUT | `/api/archive` | 아카이브 이동/복원 — `{ folder, archived: true \| false }` → `archive.json` 생성/삭제 |
 | POST | `/api/transcribe` | 스크립트 변환 시작 — `{ folder }` (Whisper 로컬 변환) |
 | GET | `/api/transcribe/:id` | 변환 작업 상태 |
 | POST | `/api/annotations` | 하이라이트/메모 추가 — `{ folder, type, start, end, text, note? }` → `notes.json`·`NOTES.md` 저장 |
@@ -120,9 +125,10 @@ downloads/
 │   ├── server.js      # Express 서버 및 API 라우트
 │   ├── inspector.js   # yt-dlp -J 메타데이터 조회 및 화질 옵션 생성
 │   ├── downloader.js  # yt-dlp subprocess 실행(영상+음성 2단계), INFO.md 생성
+│   ├── archive.js     # 아카이브 상태 저장(archive.json)
 │   └── files.js       # downloads/ 폴더 항목 목록·조회·삭제·마이그레이션
 ├── public/
-│   ├── index.html     # 탭(다운로더/뷰어) 레이아웃
+│   ├── index.html     # 탭(다운로더/아카이브/뷰어) 레이아웃
 │   ├── app.js         # 확인 → 화질 선택 → 다운로드, 탭/뷰어, INFO.md 렌더링
 │   └── style.css
 └── downloads/         # 영상별 개별 폴더 (자동 생성)

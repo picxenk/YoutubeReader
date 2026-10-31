@@ -3,6 +3,7 @@ const fsp = require("fs/promises");
 const path = require("path");
 
 const DOWNLOADS_DIR = path.join(__dirname, "..", "downloads");
+const ARCHIVE_FILE = "archive.json";
 
 const VIDEO_EXTS = [".mp4", ".webm", ".mkv", ".mov", ".avi", ".m4v", ".flv"];
 const AUDIO_EXTS = [".mp3", ".m4a", ".aac", ".opus", ".ogg", ".wav", ".flac", ".wma"];
@@ -46,6 +47,18 @@ function safeMediaPath(folderName, filename) {
   return safeSegmentPath(dir, filename);
 }
 
+async function readArchive(dir) {
+  try {
+    const data = JSON.parse(await fsp.readFile(path.join(dir, ARCHIVE_FILE), "utf8"));
+    if (data && data.archived === true) {
+      return { archived: true, archivedAt: typeof data.archivedAt === "string" ? data.archivedAt : null };
+    }
+  } catch {
+    // 파일이 없거나 손상되었으면 아카이브되지 않은 것으로 본다.
+  }
+  return { archived: false, archivedAt: null };
+}
+
 async function listItems() {
   ensureDownloadsDir();
   const entries = await fsp.readdir(DOWNLOADS_DIR, { withFileTypes: true });
@@ -72,6 +85,7 @@ async function listItems() {
       if (!latest || stat.mtime > latest) latest = stat.mtime;
     }
     if (!latest) continue;
+    const { archived, archivedAt } = await readArchive(dir);
     items.push({
       folder: entry.name,
       title: entry.name,
@@ -79,6 +93,8 @@ async function listItems() {
       hasAudio,
       size,
       modified: latest.toISOString(),
+      archived,
+      archivedAt,
     });
   }
   items.sort((a, b) => new Date(b.modified) - new Date(a.modified));
@@ -118,7 +134,17 @@ async function getItem(folderName) {
   } catch {
     script = null;
   }
-  return { folder: folderName, title: folderName, files, info, script, sourceUrl: parseSourceUrl(info) };
+  const { archived, archivedAt } = await readArchive(dir);
+  return {
+    folder: folderName,
+    title: folderName,
+    files,
+    info,
+    script,
+    sourceUrl: parseSourceUrl(info),
+    archived,
+    archivedAt,
+  };
 }
 
 async function deleteItem(folderName) {
@@ -219,6 +245,7 @@ async function migrateLegacyFiles() {
 
 module.exports = {
   DOWNLOADS_DIR,
+  ARCHIVE_FILE,
   VIDEO_EXTS,
   AUDIO_EXTS,
   ensureDownloadsDir,

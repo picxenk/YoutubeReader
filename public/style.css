@@ -354,10 +354,29 @@ button:disabled {
   color: #d70015;
 }
 
+.item-actions .archive {
+  background: #f0f0f2;
+  color: #1d1d1f;
+}
+
+.viewer-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 #viewer-back {
   color: #0071e3;
   font-size: 14px;
   padding: 0 0 4px;
+}
+
+.viewer-archive {
+  background: #f0f0f2;
+  color: #1d1d1f;
+  font-size: 13px;
+  padding: 6px 12px;
 }
 
 .viewer-video-wrap {

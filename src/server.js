@@ -7,6 +7,7 @@ const inspector = require("./inspector");
 const transcriber = require("./transcriber");
 const annotations = require("./annotations");
 const outline = require("./outline");
+const archive = require("./archive");
 
 const PORT = Number(process.env.PORT) || 3000;
 
@@ -152,6 +153,16 @@ async function main() {
     const result = await outline.saveOutline(folder.trim(), indents);
     if (result.error) return res.status(result.error).json({ error: result.message });
     res.json({ ok: true, indents: result.indents });
+  });
+
+  app.put("/api/archive", async (req, res) => {
+    const { folder, archived } = req.body || {};
+    if (typeof folder !== "string" || !folder.trim()) {
+      return res.status(400).json({ error: "폴더를 지정해 주세요." });
+    }
+    const result = await archive.setArchived(folder.trim(), archived);
+    if (result.error) return res.status(result.error).json({ error: result.message });
+    res.json({ ok: true, ...result });
   });
 
   app.post("/api/transcribe", async (req, res) => {

@@ -12,7 +12,10 @@ const fileListEl = document.getElementById("file-list");
 const fileCountEl = document.getElementById("file-count");
 const tabButtons = document.querySelectorAll(".tab");
 const tabDownloader = document.getElementById("tab-downloader");
+const tabArchive = document.getElementById("tab-archive");
 const tabViewer = document.getElementById("tab-viewer");
+const archiveListEl = document.getElementById("archive-list");
+const archiveCountEl = document.getElementById("archive-count");
 const viewerEmpty = document.getElementById("viewer-empty");
 const viewerContent = document.getElementById("viewer-content");
 const selectionMenuEl = document.getElementById("selection-menu");
@@ -31,6 +34,8 @@ let inspectedOptions = [];
 let viewedFolder = null;
 let viewedTitle = null;
 let viewedSourceUrl = null;
+let viewedArchived = false;
+let viewerReturnTab = "downloader";
 let viewedAnnotations = [];
 let viewedSegments = [];
 let viewedIndents = [];
@@ -115,6 +120,7 @@ function mediaUrl(folder, name) {
 function switchTab(name) {
   tabButtons.forEach((btn) => btn.classList.toggle("active", btn.dataset.tab === name));
   tabDownloader.classList.toggle("hidden", name !== "downloader");
+  tabArchive.classList.toggle("hidden", name !== "archive");
   tabViewer.classList.toggle("hidden", name !== "viewer");
 }
 
@@ -348,10 +354,22 @@ async function refreshList() {
 }
 
 function renderFileList(items) {
-  fileListEl.innerHTML = "";
-  fileCountEl.textContent = items.length > 0 ? `(${items.length})` : "";
+  const active = items.filter((item) => !item.archived);
+  const archived = items
+    .filter((item) => item.archived)
+    .sort((a, b) => new Date(b.archivedAt || b.modified) - new Date(a.archivedAt || a.modified));
+  renderItemList(fileListEl, fileCountEl, active, "downloader");
+  renderItemList(archiveListEl, archiveCountEl, archived, "archive");
+}
+
+function renderItemList(listEl, countEl, items, tab) {
+  const isArchive = tab === "archive";
+  listEl.innerHTML = "";
+  countEl.textContent = items.length > 0 ? `(${items.length})` : "";
   if (items.length === 0) {
-    fileListEl.innerHTML = '<div class="empty">다운로드된 항목이 없습니다.</div>';
+    listEl.innerHTML = isArchive
+      ? '<div class="empty">아카이브된 항목이 없습니다. 다 본 항목은 다운로더 목록에서 [아카이브]를 눌러 옮길 수 있습니다.</div>'
+      : '<div class="empty">다운로드된 항목이 없습니다.</div>';
     return;
   }
   for (const item of items) {
@@ -363,26 +381,63 @@ function renderFileList(items) {
     ].join("");
     const icon = item.hasVideo ? "▶" : "♪";
     const iconType = item.hasVideo ? "video" : "audio";
+    const dateText = formatDate(item.modified);
     el.innerHTML = `
       <div class="item-row">
         <div class="item-icon ${iconType}">${icon}</div>
         <div class="item-info">
           <div class="item-name" title="${escapeHtml(item.folder)}">${escapeHtml(item.title)}</div>
-          <div class="item-meta">${badges}${formatSize(item.size)} · ${formatDate(item.modified)}</div>
+          <div class="item-meta">${badges}${formatSize(item.size)} · ${dateText}</div>
         </div>
         <div class="item-actions">
           <button class="read" type="button">읽기</button>
-          <button class="delete" type="button">삭제</button>
+          <button class="archive" type="button">${isArchive ? "복원" : "아카이브"}</button>
+          ${isArchive ? '<button class="delete" type="button">삭제</button>' : ""}
         </div>
       </div>
     `;
-    el.querySelector(".read").addEventListener("click", () => openViewer(item.folder));
-    el.querySelector(".delete").addEventListener("click", () => deleteItem(item.folder, item.title));
-    fileListEl.appendChild(el);
+    el.querySelector(".read").addEventListener("click", () => openViewer(item.folder, tab));
+    el.querySelector(".archive").addEventListener("click", () => setArchived(item.folder, !isArchive));
+    if (isArchive) {
+      el.querySelector(".delete").addEventListener("click", () => deleteItem(item.folder, item.title));
+    }
+    listEl.appendChild(el);
   }
 }
 
-async function openViewer(folder) {
+async function setArchived(folder, archived) {
+  let res;
+  try {
+    res = await fetch("/api/archive", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folder, archived }),
+    });
+  } catch {
+    alert("서버에 연결할 수 없습니다.");
+    return false;
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    alert(data.error || "아카이브 상태를 바꾸지 못했습니다.");
+    return false;
+  }
+  if (viewedFolder === folder) {
+    viewedArchived = archived;
+    viewerReturnTab = archived ? "archive" : "downloader";
+    updateViewerArchiveButton();
+  }
+  await refreshList();
+  return true;
+}
+
+function updateViewerArchiveButton() {
+  const btn = document.getElementById("viewer-archive");
+  if (!btn) return;
+  btn.textContent = viewedArchived ? "다운로더로 복원" : "아카이브로 이동";
+}
+
+async function openViewer(folder, fromTab = "downloader") {
   let res;
   try {
     res = await fetch(`/api/item/${encodeURIComponent(folder)}`);
@@ -396,6 +451,7 @@ async function openViewer(folder) {
   }
   const item = await res.json();
   viewedFolder = folder;
+  viewerReturnTab = fromTab;
   renderViewer(item);
   switchTab("viewer");
 }
@@ -404,13 +460,19 @@ function renderViewer(item) {
   viewedTitle = item.title;
   viewedFolder = item.folder;
   viewedSourceUrl = item.sourceUrl || null;
+  viewedArchived = !!item.archived;
   viewedAnnotations = Array.isArray(item.annotations) ? item.annotations : [];
   viewedSegments = item.script && Array.isArray(item.script.segments) ? item.script.segments : [];
   viewedIndents = item.outline && Array.isArray(item.outline.indents) ? item.outline.indents : [];
   const videoFile = item.files.find((f) => f.type === "video");
   const audioFile = item.files.find((f) => f.type === "audio");
   const hasScript = !!(item.script && Array.isArray(item.script.segments) && item.script.segments.length > 0);
-  let html = '<button id="viewer-back" type="button">← 목록으로</button>';
+  let html = `
+    <div class="viewer-top">
+      <button id="viewer-back" type="button">← 목록으로</button>
+      <button id="viewer-archive" class="viewer-archive" type="button"></button>
+    </div>
+  `;
   if (videoFile) {
     html += `
       <div class="viewer-video-wrap">
@@ -444,7 +506,16 @@ function renderViewer(item) {
   viewerContent.innerHTML = html;
   viewerContent.classList.remove("hidden");
   viewerEmpty.classList.add("hidden");
-  document.getElementById("viewer-back").addEventListener("click", () => switchTab("downloader"));
+  document.getElementById("viewer-back").addEventListener("click", () => switchTab(viewerReturnTab));
+  document.getElementById("viewer-archive").addEventListener("click", async (event) => {
+    const btn = event.currentTarget;
+    btn.disabled = true;
+    const toArchive = !viewedArchived;
+    const ok = await setArchived(viewedFolder, toArchive);
+    btn.disabled = false;
+    if (ok) switchTab(toArchive ? "archive" : "downloader");
+  });
+  updateViewerArchiveButton();
   wireScriptInteractions(item);
 }
 
@@ -1107,6 +1178,7 @@ function showScriptError(message) {
 function resetViewer() {
   viewedFolder = null;
   viewedSourceUrl = null;
+  viewedArchived = false;
   viewedSegments = [];
   viewedIndents = [];
   scriptMediaEl = null;
