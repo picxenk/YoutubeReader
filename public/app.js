@@ -27,6 +27,8 @@ const POLL_INTERVAL = 400;
 const JOB_STORAGE_KEY = "currentJobId";
 const SYNC_STORAGE_KEY = "syncScroll";
 const SYNC_SCROLL_GAP = 12;
+const SHORTCUT_CODES = { KeyJ: "j", KeyK: "k", KeyR: "r" };
+const SHORTCUT_KEYS = { j: "j", k: "k", r: "r", "ㅓ": "j", "ㅏ": "k", "ㄱ": "r" };
 
 let currentJobId = sessionStorage.getItem(JOB_STORAGE_KEY);
 let pollTimer = null;
@@ -44,6 +46,8 @@ let scriptMediaEl = null;
 let segmentEls = [];
 let programmaticSeek = false;
 let activeSegmentIndex = -1;
+let repeatSegmentIndex = -1;
+let repeatFrame = null;
 let selectedSegments = null;
 let lastMenuPos = { x: 0, y: 0 };
 let transcribeJobId = null;
@@ -612,6 +616,7 @@ function renderSegments() {
   }));
   activeSegmentIndex = -1;
   programmaticSeek = false;
+  setRepeatSegment(-1);
   const collapseAllButton = document.getElementById("collapse-all-button");
   if (collapseAllButton) collapseAllButton.textContent = "모두 접기";
   wireSegmentEvents(container);
@@ -631,11 +636,77 @@ function wireSegmentEvents(container) {
       const segment = el.closest(".segment");
       const start = parseFloat(segment.dataset.start);
       if (!Number.isFinite(start)) return;
+      setRepeatSegment(-1);
       programmaticSeek = true;
       scriptMediaEl.currentTime = start;
       scriptMediaEl.play().catch(() => {});
     });
   });
+}
+
+function setRepeatSegment(index) {
+  if (repeatSegmentIndex >= 0 && segmentEls[repeatSegmentIndex]) {
+    segmentEls[repeatSegmentIndex].el.classList.remove("repeating");
+  }
+  repeatSegmentIndex = index >= 0 && index < segmentEls.length ? index : -1;
+  if (repeatFrame) {
+    cancelAnimationFrame(repeatFrame);
+    repeatFrame = null;
+  }
+  if (repeatSegmentIndex < 0) return;
+  segmentEls[repeatSegmentIndex].el.classList.add("repeating");
+  // timeupdate는 약 250ms 간격이라 다음 문장이 들리므로 매 프레임 끝 지점을 확인한다.
+  const tick = () => {
+    checkRepeat();
+    repeatFrame = repeatSegmentIndex >= 0 ? requestAnimationFrame(tick) : null;
+  };
+  repeatFrame = requestAnimationFrame(tick);
+}
+
+function checkRepeat() {
+  if (repeatSegmentIndex < 0 || !scriptMediaEl) return;
+  const seg = segmentEls[repeatSegmentIndex];
+  if (scriptMediaEl.currentTime >= seg.end) {
+    programmaticSeek = true;
+    scriptMediaEl.currentTime = seg.start;
+  }
+}
+
+function seekToSegment(index) {
+  if (!scriptMediaEl || index < 0 || index >= segmentEls.length) return;
+  programmaticSeek = true;
+  scriptMediaEl.currentTime = segmentEls[index].start;
+  setActiveIndex(index);
+  scrollToSegment(index);
+}
+
+function handleViewerShortcut(event) {
+  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+  if (tabViewer.classList.contains("hidden") || !scriptMediaEl || segmentEls.length === 0) return;
+  const target = event.target;
+  if (target.closest && target.closest('textarea, [contenteditable], input:not([type="checkbox"]):not([type="radio"]):not([type="range"])')) return;
+  // 한글 입력 상태에서도 동작하도록 물리 키(event.code)를 먼저 보고, 없으면 입력된 문자(ㅓ·ㅏ·ㄱ 포함)로 판단한다.
+  const key = SHORTCUT_CODES[event.code] || SHORTCUT_KEYS[(event.key || "").toLowerCase()];
+  if (!key) return;
+  event.preventDefault();
+  hideSelectionMenu();
+
+  const time = scriptMediaEl.currentTime;
+  const index = findSegmentIndexForTime(time);
+  const insideCurrent = time >= segmentEls[index].start;
+  if (key === "r") {
+    if (repeatSegmentIndex >= 0) {
+      setRepeatSegment(-1);
+      return;
+    }
+    setRepeatSegment(index);
+    seekToSegment(index);
+    scriptMediaEl.play().catch(() => {});
+    return;
+  }
+  setRepeatSegment(-1);
+  if (key === "j") seekToSegment(insideCurrent ? index + 1 : index);
+  else seekToSegment(index - 1);
 }
 
 function setGroupCollapsed(group, collapsed) {
@@ -731,6 +802,7 @@ function wireScriptInteractions(item) {
     }
 
     scriptMediaEl.addEventListener("timeupdate", () => {
+      checkRepeat();
       const index = findSegmentIndexForTime(scriptMediaEl.currentTime);
       const changed = index !== activeSegmentIndex;
       setActiveIndex(index);
@@ -745,6 +817,7 @@ function wireScriptInteractions(item) {
         return;
       }
       const index = findSegmentIndexForTime(scriptMediaEl.currentTime);
+      if (index !== repeatSegmentIndex) setRepeatSegment(-1);
       setActiveIndex(index);
       scrollToSegment(index);
     });
@@ -1186,6 +1259,7 @@ function resetViewer() {
   viewedFolder = null;
   viewedSourceUrl = null;
   viewedArchived = false;
+  setRepeatSegment(-1);
   viewedSegments = [];
   viewedIndents = [];
   scriptMediaEl = null;
@@ -1267,4 +1341,5 @@ async function deleteItem(folder, title) {
 
 if (currentJobId) startPolling();
 wireScriptSelection();
+document.addEventListener("keydown", handleViewerShortcut);
 refreshList();
