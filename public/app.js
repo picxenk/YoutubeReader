@@ -26,6 +26,7 @@ const noteInput = document.getElementById("note-input");
 const POLL_INTERVAL = 400;
 const JOB_STORAGE_KEY = "currentJobId";
 const SYNC_STORAGE_KEY = "syncScroll";
+const SYNC_SCROLL_GAP = 12;
 
 let currentJobId = sessionStorage.getItem(JOB_STORAGE_KEY);
 let pollTimer = null;
@@ -671,7 +672,13 @@ function scrollToSegment(index) {
   if (index < 0 || index >= segmentEls.length) return;
   const el = segmentEls[index].el;
   expandGroupOfSegment(el);
-  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  // 상단에 고정(sticky)된 영상 바로 아래에 직전 스크립트 한 줄을 남기고, 그 다음에 현재 줄이 오도록 맞춘다.
+  const stickyWrap = viewerContent.querySelector(".viewer-video-wrap");
+  const coveredTop = stickyWrap ? stickyWrap.getBoundingClientRect().height : 0;
+  const prev = index > 0 ? segmentEls[index - 1].el : null;
+  const anchor = prev && prev.getClientRects().length > 0 ? prev : el;
+  const top = Math.max(0, window.scrollY + anchor.getBoundingClientRect().top - coveredTop - SYNC_SCROLL_GAP);
+  window.scrollTo({ top, behavior: "smooth" });
 }
 
 function syncToggleHtml() {
